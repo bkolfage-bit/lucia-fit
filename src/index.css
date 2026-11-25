@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --paper: oklch(0.985 0.005 90);
+    --paper-deep: oklch(0.955 0.008 90);
+    --ink: oklch(0.17 0.015 85);
+    --ink-soft: oklch(0.29 0.018 85);
+    --yellow: oklch(0.84 0.18 95);
+    --blue: oklch(0.37 0.285 275);
+    --orange: oklch(0.69 0.19 55);
+    --line: oklch(0.17 0.015 85 / 0.18);
+    --background: 48 30% 98%;
+    --foreground: 45 12% 10%;
+    --border: 45 10% 82%;
+    --input: 45 10% 82%;
+    --ring: 253 100% 50%;
+    --primary: 45 12% 10%;
+    --primary-foreground: 48 30% 98%;
+    --secondary: 48 12% 94%;
+    --secondary-foreground: 45 12% 10%;
+    --muted: 48 12% 94%;
+    --muted-foreground: 45 8% 34%;
+    --accent: 49 90% 58%;
+    --accent-foreground: 45 12% 10%;
+    --card: 48 30% 98%;
+    --card-foreground: 45 12% 10%;
+    --popover: 48 30% 98%;
+    --popover-foreground: 45 12% 10%;
+    --destructive: 0 75% 45%;
+    --destructive-foreground: 48 30% 98%;
+    --radius: 0.75rem;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 24px;
+    background: var(--paper);
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100dvh;
+    overflow-x: clip;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Inter Tight", sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+
+  button,
+  a,
+  summary,
+  label:has(input[type="radio"]) {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled),
+  summary,
+  label:has(input[type="radio"]:not(:disabled)) {
+    cursor: pointer;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+  }
+
+  ::selection {
+    background: var(--blue);
+    color: var(--paper);
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--orange);
+    outline-offset: 4px;
+  }
+}
