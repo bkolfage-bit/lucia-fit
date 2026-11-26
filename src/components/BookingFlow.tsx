@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
-import { ALL_TIMES, SERVICES, formatPrice, getSessionPrice } from "@contracts/training";
+import { ALL_TIMES, SERVICES, formatPrice, getBookableDates, getSessionPrice } from "@contracts/training";
 import type { ServiceId, SessionDuration } from "@contracts/training";
 import type { Client } from "braintree-web/client";
 import type { DataCollector } from "braintree-web/data-collector";
@@ -33,18 +33,6 @@ function localDateValue(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function getDates() {
-  const dates: string[] = [];
-  const cursor = new Date();
-  cursor.setHours(12, 0, 0, 0);
-  cursor.setDate(cursor.getDate() + 1);
-  while (dates.length < 14) {
-    if (cursor.getDay() !== 0) dates.push(localDateValue(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return dates;
 }
 
 function friendlyDate(value: string, long = false) {
@@ -75,7 +63,7 @@ function icsEscape(value: string) {
 }
 
 export default function BookingFlow() {
-  const dates = useMemo(getDates, []);
+  const dates = useMemo(() => getBookableDates(), []);
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const initialToken = params.get("booking");
   const [step, setStep] = useState<Step>(initialToken ? "confirmed" : "session");
@@ -416,7 +404,7 @@ export default function BookingFlow() {
                   aria-pressed={participants === count}
                 >
                   <Users size={20} />
-                  <span><strong>{count === 1 ? "Just me" : "Two of us"}</strong><small>{service.durationOptions.length === 1 ? `${formatPrice(getSessionPrice(service, count, 45))} for 45 minutes` : count === 1 ? "$165 per hour" : "$250 per hour · train together"}</small></span>
+                  <span><strong>{count === 1 ? "Just me" : "Two of us"}</strong><small>{service.durationOptions.length === 1 ? `${formatPrice(getSessionPrice(service, count, service.duration))} for ${service.duration} minutes` : count === 1 ? "$165 per hour" : "$250 per hour · train together"}</small></span>
                   {participants === count && <Check size={18} />}
                 </button>
               ))}
@@ -578,7 +566,7 @@ export default function BookingFlow() {
                     disabled={!paymentConfig.data?.venmoEnabled}
                   />
                   <Smartphone size={20} />
-                  <span><strong>Venmo</strong><small>{paymentConfig.data?.venmoEnabled ? "Authorize with the Venmo app or desktop login" : "Activates when Braintree Venmo is connected"}</small></span>
+                  <span><strong>Venmo · @lucia-nuzzi</strong><small>{paymentConfig.data?.venmoEnabled ? "Authorize with the Venmo app or desktop login" : "Activates when Braintree Venmo is connected"}</small></span>
                 </label>
                 <label className={paymentMethod === "pay_later" ? "payment-option is-selected" : "payment-option"}>
                   <input type="radio" name="payment" value="pay_later" checked={paymentMethod === "pay_later"} onChange={() => setPaymentMethod("pay_later")} />
@@ -623,7 +611,7 @@ export default function BookingFlow() {
                   {params.get("payment") === "cancelled" && <p className="payment-notice">Card checkout was closed before payment. Your reservation is still visible here; you can cancel it and choose another option.</p>}
                   {currentBooking.data.paymentMethod === "venmo" && currentBooking.data.paymentStatus !== "paid" && (
                     <div className="venmo-checkout-panel">
-                      <div><Smartphone size={22} /><span><strong>{currentBooking.data.paymentStatus === "processing" ? "Venmo payment under review" : `Complete ${formatPrice(currentBooking.data.amountCents)} with Venmo`}</strong><small>{currentBooking.data.paymentStatus === "processing" ? "Do not submit another payment until Lucia confirms the result." : "You’ll approve the payment in Venmo. Your session is confirmed only after it succeeds."}</small></span></div>
+                      <div><Smartphone size={22} /><span><strong>{currentBooking.data.paymentStatus === "processing" ? "Venmo payment under review" : `Complete ${formatPrice(currentBooking.data.amountCents)} with Venmo`}</strong><small>{currentBooking.data.paymentStatus === "processing" ? "Do not submit another payment until Lucia confirms the result." : "Recipient: @lucia-nuzzi. You’ll approve the payment in Venmo; your session is confirmed only after it succeeds."}</small></span></div>
                       {currentBooking.data.paymentStatus === "pending" && (
                         <button className="button venmo-button" type="button" onClick={completeVenmoPayment} disabled={!venmoReady || payVenmo.isPending}>
                           {payVenmo.isPending ? <><LoaderCircle className="spin" size={18} /> Recording payment…</> : venmoReady ? <>Complete with Venmo <ArrowRight size={18} /></> : <><LoaderCircle className="spin" size={18} /> Connecting to Venmo…</>}

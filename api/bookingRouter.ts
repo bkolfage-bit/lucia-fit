@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { bookings } from "@db/schema";
-import { ALL_TIMES, SERVICE_IDS, getService, getSessionPrice, sessionsOverlap, supportsDuration } from "@contracts/training";
+import { ALL_TIMES, SERVICE_IDS, getBookableDates, getService, getSessionPrice, sessionsOverlap, supportsDuration } from "@contracts/training";
 import { getStripe, isStripeEnabled } from "./stripe";
 import { getBraintree, getBraintreeMerchantAccountId, getVenmoProfileId, isVenmoEnabled } from "./braintree";
 
@@ -20,12 +20,8 @@ function assertBookableDate(value: string) {
   if (date.getDay() === 0) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Sundays are rest days. Choose another date." });
   }
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const lastDay = new Date(today);
-  lastDay.setDate(lastDay.getDate() + 60);
-  if (date < today || date > lastDay) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Choose a date within the next 60 days." });
+  if (!getBookableDates().includes(value)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Choose a date within the 30-day booking window." });
   }
 }
 
@@ -49,6 +45,7 @@ export const bookingRouter = createRouter({
     stripeEnabled: isStripeEnabled(),
     venmoEnabled: isVenmoEnabled(),
     venmoProfileId: getVenmoProfileId(),
+    venmoRecipient: "@lucia-nuzzi",
   })),
 
   venmoClientToken: publicQuery.query(async () => {

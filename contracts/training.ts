@@ -14,10 +14,10 @@ export const SERVICES = [
     id: "mobility",
     name: "Mobility & stretching",
     shortName: "Mobility",
-    duration: 45,
-    durationOptions: [45],
-    priceCents: 13000,
-    priceCentsTwo: 20000,
+    duration: 60,
+    durationOptions: [60],
+    priceCents: 16500,
+    priceCentsTwo: 25000,
     description: "Guided stretching and mobility work to improve flexibility, posture, and ease of movement.",
     bestFor: "Move better & recover",
   },
@@ -37,10 +37,28 @@ export const SERVICES = [
 export type ServiceId = (typeof SERVICES)[number]["id"];
 export type SessionDuration = 45 | 60 | 120;
 export const SERVICE_IDS = SERVICES.map((service) => service.id) as [ServiceId, ...ServiceId[]];
-export const ALL_TIMES = Array.from({ length: 26 }, (_, index) => {
-  const minutes = 7 * 60 + index * 30;
+export const BOOKING_WINDOW_DAYS = 30;
+export const ALL_TIMES = Array.from({ length: 22 }, (_, index) => {
+  const minutes = 7 * 60 + 30 + index * 30;
   return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 }) as [string, ...string[]];
+
+export function getBookableDates(limit = BOOKING_WINDOW_DAYS) {
+  const dates: string[] = [];
+  const cursor = new Date();
+  cursor.setHours(12, 0, 0, 0);
+  cursor.setDate(cursor.getDate() + 1);
+  while (dates.length < limit) {
+    if (cursor.getDay() !== 0) {
+      const year = cursor.getFullYear();
+      const month = String(cursor.getMonth() + 1).padStart(2, "0");
+      const day = String(cursor.getDate()).padStart(2, "0");
+      dates.push(`${year}-${month}-${day}`);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
 
 export function getService(id: string) {
   return SERVICES.find((service) => service.id === id);

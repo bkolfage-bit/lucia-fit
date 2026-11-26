@@ -51,7 +51,7 @@ BRAINTREE_PUBLIC_KEY=...
 BRAINTREE_PRIVATE_KEY=...
 ```
 
-Enable Venmo in the Braintree merchant account and complete Venmo's business review before accepting live payments. If the account requires a specific merchant account or Venmo business profile, also set:
+The checkout identifies **@lucia-nuzzi** as the intended recipient. Enable Venmo in the Braintree merchant account, complete Venmo's business review, and ensure that merchant account is linked to Lucia Nuzzi's Venmo business profile before accepting live payments. Braintree routes funds through that linked business profile—not through the displayed username alone. If the account requires a specific merchant account or Venmo business profile ID, also set:
 
 ```bash
 BRAINTREE_MERCHANT_ACCOUNT_ID=...
@@ -62,13 +62,17 @@ The browser receives only a short-lived Braintree client token. After the visito
 
 Never expose `BRAINTREE_PRIVATE_KEY` through `VITE_` variables or frontend code. Production Venmo checkout requires HTTPS, an approved production Braintree account, and testing of the mobile app-return and desktop login flows with real merchant credentials.
 
+## Local SEO
+
+The site targets Palm Beach, Florida with a location-specific title and description, Open Graph and Twitter sharing metadata, crawler directives in `public/robots.txt`, and Schema.org structured data for Lucia, her local business, and the three training services. Palm Beach location details also appear in the hero, Meet Lucia section, FAQs, and footer. No unverified street address or phone number is included. Canonical and social URLs resolve from the active site origin; add a sitemap when the final production domain is known.
+
 ## Launch settings
 
-- Services and prices: `contracts/training.ts` ($165/hour for one person; $250/hour for two; Mobility & Stretching is $130 for 45 minutes solo or $200 for two)
-- Weekly time slots: `ALL_TIMES` in `contracts/training.ts` (30-minute starts from 7:00 AM through 7:30 PM; Sundays are closed). Booked and overlapping start times are removed from the picker.
+- Services and prices: `contracts/training.ts` ($165/hour for one person; $250/hour for two; Mobility & Stretching is a fixed 60-minute session at the same $165/$250 rates)
+- Weekly time slots: `ALL_TIMES` in `contracts/training.ts` (30-minute starts from 7:30 AM through 6:00 PM; Sundays are closed). Booked and overlapping start times are removed from the picker. The booking calendar offers the next 30 available days.
 - Booking UI: `src/components/BookingFlow.tsx`
 - Booking API: `api/bookingRouter.ts`
 - Homepage and motion: `src/pages/Home.tsx`, `src/App.css`
-- Replace supporting photography in `public/images/`; see `CREDITS.md` for current image sources.
+- Photography: user-supplied images in `public/images/`; see `CREDITS.md` for placement details.
 
-The Instagram media supplied in the brief was not accessible from the build environment, so no Instagram photos are redistributed. Lucia's official profile is linked throughout the site.
+Lucia's official Instagram profile is linked throughout the site. The active website uses only user-supplied photography.

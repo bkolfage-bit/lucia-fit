@@ -9,6 +9,7 @@ import {
   Dumbbell,
   House,
   Instagram,
+  Mail,
   Menu,
   Move,
   Sparkles,
@@ -35,6 +36,10 @@ const experienceLevels = ["I’m just starting", "I train sometimes", "I train r
 
 const faqs = [
   {
+    question: "Where does Lucia train clients?",
+    answer: "Lucia is based in Palm Beach, Florida, and provides at-home personal training in Palm Beach. Add your training address when booking so Lucia can confirm the session location with you.",
+  },
+  {
     question: "Do I need a home gym?",
     answer: "Not at all. Your session is designed around your space and whatever equipment you already have. Lucia can build an effective session with bodyweight and a few versatile training tools. Add your available equipment to the booking notes.",
   },
@@ -49,10 +54,6 @@ const faqs = [
   {
     question: "How much space do we need?",
     answer: "Enough room for a mat and comfortable movement is a useful starting point. A living room, garage, backyard, or building gym can all work. Your exact training address is collected securely during booking.",
-  },
-  {
-    question: "Can I change my appointment?",
-    answer: "Unpaid reservations include a private cancellation link in the confirmation view. Cancelling releases the time immediately. For a paid session or a reschedule, contact Lucia through her Instagram profile so the change can be handled personally.",
   },
 ];
 
@@ -216,7 +217,10 @@ export default function Home() {
           <a href="#about">Meet Lucia</a>
           <a href="#finder">Session finder</a>
         </nav>
-        <a className="header-book" href="#book">Book a session <ArrowUpRight size={17} /></a>
+        <div className="header-actions">
+          <a className="header-contact" href="mailto:Lucia@fitbylucia.com?subject=Personal%20training%20inquiry" aria-label="Email Lucia at Lucia@fitbylucia.com"><Mail size={16} /> Contact Lucia</a>
+          <a className="header-book" href="#book">Book a session <ArrowUpRight size={17} /></a>
+        </div>
         <button className="menu-button" type="button" onClick={() => setMenuOpen(true)} aria-label="Open menu" aria-expanded={menuOpen}><Menu /></button>
       </header>
 
@@ -227,6 +231,7 @@ export default function Home() {
             <a key={href} href={href} onClick={() => setMenuOpen(false)} tabIndex={menuOpen ? 0 : -1}><span>0{index + 1}</span>{label}<ArrowUpRight /></a>
           ))}
         </nav>
+        <a className="mobile-contact button button-yellow" href="mailto:Lucia@fitbylucia.com?subject=Personal%20training%20inquiry" onClick={() => setMenuOpen(false)} tabIndex={menuOpen ? 0 : -1}><Mail size={18} /> Contact Lucia</a>
         <a className="mobile-instagram" href="https://www.instagram.com/lucialuciafit/" target="_blank" rel="noreferrer" tabIndex={menuOpen ? 0 : -1}><Instagram size={18} /> @lucialuciafit</a>
       </div>
 
@@ -237,8 +242,8 @@ export default function Home() {
             <div className="hero-image-inner"><img src="/images/lucia-nuzzi.webp" alt="" fetchPriority="high" /></div>
           </div>
           <div className="hero-intro">
-            <span className="availability-pill"><i /> Now booking · At-home sessions</span>
-            <p>Personal training that comes to you.<br />Built around your body. Made for your life.</p>
+            <span className="availability-pill"><i /> Palm Beach · At-home sessions</span>
+            <p>Palm Beach personal training that comes to you.<br />Built around your body. Made for your life.</p>
             <a className="button button-dark" href="#book">Book your first session <ArrowRight size={18} /></a>
           </div>
           <CircularBookLink />
@@ -277,8 +282,8 @@ export default function Home() {
           </div>
           <div className="program-composition">
             <figure className="floating-photo photo-one">
-              <div className="photo-window"><img className="parallax-image" src="/images/home-strength.webp" alt="A coached dumbbell session at home" loading="lazy" /><img className="parallax-image image-color" src="/images/home-strength.webp" alt="" loading="lazy" /></div>
-              <figcaption>Strength, without the gym commute.</figcaption>
+              <div className="photo-window"><img className="parallax-image" src="/images/lucia-assisted-knee-stretch.webp" alt="Lucia guiding a client through an assisted knee stretch" loading="lazy" /><img className="parallax-image image-color" src="/images/lucia-assisted-knee-stretch.webp" alt="" loading="lazy" /></div>
+              <figcaption>Personal guidance. Purposeful movement.</figcaption>
             </figure>
             <div className="program-list">
               {SERVICES.map((service, index) => (
@@ -290,8 +295,8 @@ export default function Home() {
               ))}
             </div>
             <figure className="floating-photo photo-two">
-              <div className="photo-window"><img className="parallax-image" src="/images/mobility-at-home.webp" alt="A mobility session in a bright living space" loading="lazy" /><img className="parallax-image image-color" src="/images/mobility-at-home.webp" alt="" loading="lazy" /></div>
-              <figcaption>Move better where you live.</figcaption>
+              <div className="photo-window"><img className="parallax-image" src="/images/lucia-assisted-shoulder-stretch.webp" alt="Lucia guiding a client through an assisted shoulder stretch" loading="lazy" /><img className="parallax-image image-color" src="/images/lucia-assisted-shoulder-stretch.webp" alt="" loading="lazy" /></div>
+              <figcaption>Mobility, with hands-on coaching.</figcaption>
             </figure>
           </div>
         </section>
@@ -323,8 +328,8 @@ export default function Home() {
               </article>
             ))}
             <figure className="method-photo">
-              <div className="photo-window"><img className="parallax-image" src="/images/coaching-detail.webp" alt="A coach guiding a client through an arm position" loading="lazy" /><img className="parallax-image image-color" src="/images/coaching-detail.webp" alt="" loading="lazy" /></div>
-              <figcaption>Coaching you can feel. Progress you can own.</figcaption>
+              <div className="photo-window"><img className="parallax-image" src="/images/lucia-dumbbell-training.webp" alt="Lucia performing a focused dumbbell training exercise" loading="lazy" /><img className="parallax-image image-color" src="/images/lucia-dumbbell-training.webp" alt="" loading="lazy" /></div>
+              <figcaption>Coaching you can feel. Strength you can own.</figcaption>
             </figure>
           </div>
         </section>
@@ -342,7 +347,7 @@ export default function Home() {
               <figcaption><span>Lucia Nuzzi</span><span>Strength / Posture / Mobility</span></figcaption>
             </figure>
             <div className="about-content">
-              <p>Lucia is a NASM-Certified Personal Trainer with a lifelong passion for movement, athletic performance, and helping others unlock their physical potential.</p>
+              <p>Based in Palm Beach, Florida, Lucia is a NASM-Certified Personal Trainer with a lifelong passion for movement, athletic performance, and helping others unlock their physical potential.</p>
               <p>Growing up as an avid equestrian, Lucia developed a deep appreciation for balance, coordination, body awareness, and the relationship between movement and control. Her passion for athletics extends beyond horseback riding to motorcycle track riding, tennis, and golf, giving her a diverse perspective on physical performance.</p>
               <p>Lucia believes fitness is about more than aesthetics—it’s about building a strong, capable, and resilient body that allows you to live and perform at your best.</p>
               <p>Specializing in posture and mobility training, she helps clients improve alignment, flexibility, stability, strength, and overall movement quality. Her personalized approach combines functional movement, strength training, and mobility techniques tailored to each client’s individual needs, abilities, and goals.</p>
@@ -357,7 +362,7 @@ export default function Home() {
           <div className="booking-heading">
             <div className="section-index">06 / BOOK LUCIA</div>
             <h2>Your next session<br />starts <span>here.</span></h2>
-            <p>Solo training is $165/hour. Train together for $250/hour. Mobility & stretching is $130 for 45 minutes.</p>
+            <p>Solo training is $165/hour. Train together for $250/hour. Mobility & stretching is $165 for 60 minutes.</p>
           </div>
           <BookingFlow />
         </section>
@@ -376,7 +381,7 @@ export default function Home() {
       </main>
 
       <footer className="site-footer">
-        <div className="footer-top"><span>READY WHEN YOU ARE</span><span>AT-HOME PERSONAL TRAINING</span></div>
+        <div className="footer-top"><span>PALM BEACH, FLORIDA</span><span>AT-HOME PERSONAL TRAINING</span></div>
         <a href="#book" className="footer-cta"><span>LET’S MOVE.</span><i><ArrowUpRight /></i></a>
         <div className="footer-bottom">
           <a className="brand footer-brand" href="#top"><span className="brand-mark">LN</span><span>Lucia Nuzzi<small>Personal training</small></span></a>
