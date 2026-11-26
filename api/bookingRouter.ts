@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { bookings } from "@db/schema";
-import { ALL_TIMES, SERVICE_IDS, getBookableDates, getService, getSessionPrice, sessionsOverlap, supportsDuration } from "@contracts/training";
+import { ALL_TIMES, SERVICE_IDS, VENMO_USERNAME, getBookableDates, getService, getSessionPrice, sessionsOverlap, supportsDuration } from "@contracts/training";
 import { getStripe, isStripeEnabled } from "./stripe";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -36,12 +36,13 @@ const bookingInput = z.object({
   address: z.string().trim().min(5).max(800),
   goals: z.string().trim().max(1200).optional(),
   notes: z.string().trim().max(1200).optional(),
-  paymentMethod: z.enum(["stripe", "pay_later"]),
+  paymentMethod: z.enum(["stripe", "venmo", "pay_later"]),
 });
 
 export const bookingRouter = createRouter({
   paymentConfig: publicQuery.query(() => ({
     stripeEnabled: isStripeEnabled(),
+    venmoRecipient: `@${VENMO_USERNAME}`,
   })),
 
   availability: publicQuery

@@ -12,12 +12,13 @@ import {
   LoaderCircle,
   MapPin,
   ShieldCheck,
+  Smartphone,
   Users,
   WalletCards,
   X,
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
-import { ALL_TIMES, SERVICES, formatPrice, getBookableDates, getSessionPrice } from "@contracts/training";
+import { ALL_TIMES, SERVICES, VENMO_USERNAME, formatPrice, getBookableDates, getSessionPrice } from "@contracts/training";
 import type { ServiceId, SessionDuration } from "@contracts/training";
 
 type TimeSlot = (typeof ALL_TIMES)[number];
@@ -59,7 +60,7 @@ export default function BookingFlow() {
   const [participants, setParticipants] = useState<1 | 2>(1);
   const [sessionDate, setSessionDate] = useState(dates[0]);
   const [startTime, setStartTime] = useState<TimeSlot | "">("");
-  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "pay_later">("pay_later");
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "venmo" | "pay_later">("venmo");
   const [manageToken, setManageToken] = useState(initialToken || "");
   const [cancelArmed, setCancelArmed] = useState(false);
   const [calendarSaved, setCalendarSaved] = useState(false);
@@ -128,10 +129,6 @@ export default function BookingFlow() {
     window.addEventListener("lucia:select-service", selectService);
     return () => window.removeEventListener("lucia:select-service", selectService);
   }, []);
-
-  useEffect(() => {
-    if (paymentConfig.data?.stripeEnabled) setPaymentMethod("stripe");
-  }, [paymentConfig.data?.stripeEnabled]);
 
   useEffect(() => {
     const sessionId = params.get("session_id");
@@ -411,6 +408,11 @@ export default function BookingFlow() {
               <div className="summary-price"><span>Total</span><strong>{formatPrice(sessionPrice)}</strong></div>
               <fieldset className="payment-options">
                 <legend>Payment</legend>
+                <label className={paymentMethod === "venmo" ? "payment-option is-selected" : "payment-option"}>
+                  <input type="radio" name="payment" value="venmo" checked={paymentMethod === "venmo"} onChange={() => setPaymentMethod("venmo")} />
+                  <Smartphone size={20} />
+                  <span><strong>Venmo · @{VENMO_USERNAME}</strong><small>Fastest — send it in the Venmo app right after booking</small></span>
+                </label>
                 <label className={paymentMethod === "stripe" ? "payment-option is-selected" : "payment-option"}>
                   <input
                     type="radio"
@@ -430,7 +432,7 @@ export default function BookingFlow() {
                 </label>
               </fieldset>
               <button className="button button-yellow checkout-button" type="submit" disabled={createBooking.isPending}>
-                {createBooking.isPending ? <><LoaderCircle className="spin" size={18} /> Reserving…</> : paymentMethod === "stripe" ? <>Continue to secure payment <ArrowRight size={18} /></> : <>Confirm my session <ArrowRight size={18} /></>}
+                {createBooking.isPending ? <><LoaderCircle className="spin" size={18} /> Reserving…</> : paymentMethod === "stripe" ? <>Continue to secure payment <ArrowRight size={18} /></> : paymentMethod === "venmo" ? <>Reserve & pay with Venmo <ArrowRight size={18} /></> : <>Confirm my session <ArrowRight size={18} /></>}
               </button>
               <p className="secure-note"><ShieldCheck size={15} /> Your details are used only to manage this booking.</p>
               {createBooking.isError && <p className="form-error" role="alert">{createBooking.error.message}</p>}
@@ -460,8 +462,21 @@ export default function BookingFlow() {
                   <div className="confirmation-mark"><Check size={38} strokeWidth={2.5} /></div>
                   <span className="booking-kicker">Booking LN-{String(currentBooking.data.id).padStart(5, "0")}</span>
                   <h3>{currentBooking.data.bookingStatus === "confirmed" ? "You’re booked. Let’s move." : "Your time is reserved."}</h3>
-                  <p>{currentBooking.data.customerName.split(" ")[0]}, your session details are below. {currentBooking.data.paymentStatus === "paid" ? "Payment is complete." : currentBooking.data.paymentMethod === "pay_later" ? "You can pay Lucia at the session." : "Complete payment to finalize your booking."}</p>
+                  <p>{currentBooking.data.customerName.split(" ")[0]}, your session details are below. {currentBooking.data.paymentStatus === "paid" ? "Payment is complete." : currentBooking.data.paymentMethod === "pay_later" ? "You can pay Lucia at the session." : currentBooking.data.paymentMethod === "venmo" ? "Your time is held — send the Venmo payment below and Lucia will confirm your session." : "Complete payment to finalize your booking."}</p>
                   {params.get("payment") === "cancelled" && <p className="payment-notice">Card checkout was closed before payment. Your reservation is still visible here; you can cancel it and choose another option.</p>}
+                  {currentBooking.data.paymentMethod === "venmo" && currentBooking.data.paymentStatus === "pending" && (
+                    <div className="venmo-checkout-panel">
+                      <div><Smartphone size={22} /><span><strong>Send {formatPrice(currentBooking.data.amountCents)} with Venmo</strong><small>Opens Venmo with the recipient, amount, and note filled in. Lucia confirms your session as soon as it arrives.</small></span></div>
+                      <a
+                        className="button venmo-button"
+                        href={`https://venmo.com/${VENMO_USERNAME}?txn=pay&amount=${(currentBooking.data.amountCents / 100).toFixed(2)}&note=${encodeURIComponent(`Lucia Nuzzi session LN-${String(currentBooking.data.id).padStart(5, "0")} · ${friendlyDate(currentBooking.data.sessionDate)} ${friendlyTime(currentBooking.data.startTime)}`)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Pay @{VENMO_USERNAME} in Venmo <ArrowRight size={18} />
+                      </a>
+                    </div>
+                  )}
                   <div className="confirmation-actions">
                     <button className="button button-dark" type="button" onClick={downloadCalendar}><Download size={18} /> {calendarSaved ? "Calendar file saved" : "Add to calendar"}</button>
                     <button className="text-button" type="button" onClick={startAnother}>Book another session</button>
@@ -474,7 +489,7 @@ export default function BookingFlow() {
                   <div className="ticket-line"><MapPin size={18} /><span>{currentBooking.data.address}</span></div>
                   <div className="ticket-line"><Clock3 size={18} /><span>{currentBooking.data.duration} minutes</span></div>
                   <div className="ticket-line"><Users size={18} /><span>{currentBooking.data.participants === 1 ? "1 person" : "2 people training together"}</span></div>
-                  <div className="ticket-total"><span>{currentBooking.data.paymentStatus === "paid" ? "Paid online" : "Due at session"}</span><strong>{formatPrice(currentBooking.data.amountCents)}</strong></div>
+                  <div className="ticket-total"><span>{currentBooking.data.paymentStatus === "paid" ? currentBooking.data.paymentMethod === "venmo" ? "Paid with Venmo" : "Paid online" : currentBooking.data.paymentMethod === "venmo" ? "Venmo payment due" : "Due at session"}</span><strong>{formatPrice(currentBooking.data.amountCents)}</strong></div>
                   {currentBooking.data.paymentStatus === "processing" ? <p className="processing-note">Payment review in progress. Contact Lucia to change this session.</p> : !cancelArmed ? (
                     <button className="cancel-link" type="button" onClick={() => setCancelArmed(true)}>Need to cancel?</button>
                   ) : (

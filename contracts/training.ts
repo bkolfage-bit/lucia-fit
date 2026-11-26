@@ -37,6 +37,7 @@ export const SERVICES = [
 export type ServiceId = (typeof SERVICES)[number]["id"];
 export type SessionDuration = 45 | 60 | 120;
 export const SERVICE_IDS = SERVICES.map((service) => service.id) as [ServiceId, ...ServiceId[]];
+export const VENMO_USERNAME = "lucia-nuzzi";
 export const BOOKING_WINDOW_DAYS = 30;
 export const ALL_TIMES = Array.from({ length: 22 }, (_, index) => {
   const minutes = 7 * 60 + 30 + index * 30;

@@ -1,6 +1,6 @@
 # Lucia Nuzzi — At-Home Personal Training
 
-A responsive full-stack personal-training website with editorial motion, an interactive session finder, persistent appointment booking, calendar export, cancellation, and optional Stripe Checkout.
+A responsive full-stack personal-training website with editorial motion, an interactive session finder, persistent appointment booking, calendar export, cancellation, Venmo payments, and optional Stripe Checkout.
 
 ## Run
 
@@ -39,6 +39,10 @@ Create a Stripe webhook pointing to `/api/stripe/webhook` and subscribe to:
 Stripe Checkout uses the booking's server-side service price, not a browser-supplied amount. Successful payments mark the booking paid and confirmed through both the return verification and the webhook.
 
 Do not expose the secret keys through `VITE_` variables or frontend code.
+
+## Venmo payments
+
+Venmo is the primary payment option and needs no setup, credentials, or payment processor. When a client chooses Venmo, the session time is reserved immediately and the confirmation screen shows a **Pay @lucia-nuzzi in Venmo** button. It opens the client's Venmo app (or venmo.com on desktop) with the recipient, exact amount, and a booking-reference note already filled in. Lucia confirms receipt in her own Venmo app; the reservation holds the slot in the meantime. Automated Venmo capture would require PayPal-owned rails (Braintree / PayPal Checkout), which this project intentionally does not use.
 
 ## Local SEO
 
