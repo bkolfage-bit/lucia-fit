@@ -51,8 +51,6 @@
     "@trpc/react-query": "^11.8.1",
     "@trpc/server": "^11.8.1",
     "ai": "6.0.290",
-    "braintree": "^3.41.0",
-    "braintree-web": "^3.148.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -84,8 +82,6 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@hono/vite-dev-server": "^0.19.0",
-    "@types/braintree": "^3.4.5",
-    "@types/braintree-web": "^3.143.2",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

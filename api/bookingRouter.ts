@@ -6,7 +6,6 @@ import { getDb } from "./queries/connection";
 import { bookings } from "@db/schema";
 import { ALL_TIMES, SERVICE_IDS, getBookableDates, getService, getSessionPrice, sessionsOverlap, supportsDuration } from "@contracts/training";
 import { getStripe, isStripeEnabled } from "./stripe";
-import { getBraintree, getBraintreeMerchantAccountId, getVenmoProfileId, isVenmoEnabled } from "./braintree";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const timeSchema = z.enum(ALL_TIMES);
@@ -37,28 +36,13 @@ const bookingInput = z.object({
   address: z.string().trim().min(5).max(800),
   goals: z.string().trim().max(1200).optional(),
   notes: z.string().trim().max(1200).optional(),
-  paymentMethod: z.enum(["stripe", "venmo", "pay_later"]),
+  paymentMethod: z.enum(["stripe", "pay_later"]),
 });
 
 export const bookingRouter = createRouter({
   paymentConfig: publicQuery.query(() => ({
     stripeEnabled: isStripeEnabled(),
-    venmoEnabled: isVenmoEnabled(),
-    venmoProfileId: getVenmoProfileId(),
-    venmoRecipient: "@lucia-nuzzi",
   })),
-
-  venmoClientToken: publicQuery.query(async () => {
-    const braintree = getBraintree();
-    if (!braintree) {
-      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Venmo checkout is not connected." });
-    }
-    const response = await braintree.clientToken.generate({});
-    if (!response.success || !response.clientToken) {
-      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Venmo checkout could not be initialized." });
-    }
-    return { clientToken: response.clientToken };
-  }),
 
   availability: publicQuery
     .input(z.object({ date: dateSchema, duration: durationSchema }))
@@ -88,13 +72,6 @@ export const bookingRouter = createRouter({
         message: "Card checkout is not connected yet. Choose pay at session.",
       });
     }
-    if (input.paymentMethod === "venmo" && !isVenmoEnabled()) {
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Venmo checkout is not connected yet. Choose pay at session.",
-      });
-    }
-
     const db = getDb();
     const dayBookings = await db
       .select({
@@ -190,113 +167,6 @@ export const bookingRouter = createRouter({
       const participants: 1 | 2 =
         service && booking.amountCents === getSessionPrice(service, 2, booking.duration) ? 2 : 1;
       return { ...booking, participants };
-    }),
-
-  payVenmo: publicQuery
-    .input(
-      z.object({
-        token: z.string().uuid(),
-        paymentMethodNonce: z.string().min(1).max(1000),
-        deviceData: z.string().max(10000).optional(),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      const braintree = getBraintree();
-      if (!braintree) {
-        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Venmo checkout is not connected." });
-      }
-      const db = getDb();
-      const [booking] = await db.select().from(bookings).where(eq(bookings.manageToken, input.token)).limit(1);
-      if (!booking || booking.paymentMethod !== "venmo") {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Venmo booking not found." });
-      }
-      if (booking.bookingStatus === "cancelled") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "This reservation has been cancelled." });
-      }
-      if (booking.paymentStatus === "paid") {
-        return {
-          paid: true,
-          bookingId: booking.id,
-          transactionId: booking.braintreeTransactionId,
-          venmoUsername: booking.venmoUsername,
-        };
-      }
-      if (booking.paymentStatus !== "pending") {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "This Venmo payment needs review. Contact Lucia before trying again.",
-        });
-      }
-
-      const service = getService(booking.serviceId);
-      const validAmounts = service
-        ? [getSessionPrice(service, 1, booking.duration), getSessionPrice(service, 2, booking.duration)]
-        : [];
-      if (!validAmounts.includes(booking.amountCents)) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "The booking total needs review." });
-      }
-
-      const [claim] = await db
-        .update(bookings)
-        .set({ paymentStatus: "processing" })
-        .where(and(eq(bookings.id, booking.id), eq(bookings.paymentStatus, "pending")));
-      if (claim.affectedRows !== 1) {
-        throw new TRPCError({ code: "CONFLICT", message: "This payment is already being processed." });
-      }
-
-      let result;
-      try {
-        const nameParts = booking.customerName.trim().split(/\s+/);
-        const profileId = getVenmoProfileId();
-        result = await braintree.transaction.sale({
-          amount: (booking.amountCents / 100).toFixed(2),
-          paymentMethodNonce: input.paymentMethodNonce,
-          deviceData: input.deviceData || undefined,
-          merchantAccountId: getBraintreeMerchantAccountId(),
-          orderId: `LN-${booking.id}-${booking.manageToken.slice(0, 8)}`,
-          customer: {
-            firstName: nameParts.shift() || booking.customerName,
-            lastName: nameParts.join(" ") || undefined,
-            email: booking.email,
-            phone: booking.phone,
-          },
-          options: {
-            submitForSettlement: true,
-            ...(profileId ? { venmo: { profileId } } : {}),
-          },
-        });
-      } catch {
-        // A network failure can be ambiguous. Keep the processing lock so a retry cannot double-charge.
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "We couldn’t confirm the Venmo payment. Contact Lucia before retrying so you aren’t charged twice.",
-        });
-      }
-
-      if (!result.success || !result.transaction) {
-        await db
-          .update(bookings)
-          .set({ paymentStatus: "pending" })
-          .where(and(eq(bookings.id, booking.id), eq(bookings.paymentStatus, "processing")));
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Venmo didn’t approve the payment. No payment was recorded; you can try again or cancel the reservation.",
-        });
-      }
-
-      const transaction = result.transaction;
-      const venmoUsername = transaction.venmoAccount?.username || null;
-      await db
-        .update(bookings)
-        .set({
-          paymentStatus: "paid",
-          bookingStatus: "confirmed",
-          braintreeTransactionId: transaction.id,
-          venmoUsername,
-        })
-        .where(eq(bookings.id, booking.id));
-
-      return { paid: true, bookingId: booking.id, transactionId: transaction.id, venmoUsername };
     }),
 
   verifyPayment: publicQuery

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   ArrowLeft,
@@ -12,7 +12,6 @@ import {
   LoaderCircle,
   MapPin,
   ShieldCheck,
-  Smartphone,
   Users,
   WalletCards,
   X,
@@ -20,9 +19,6 @@ import {
 import { trpc } from "@/providers/trpc";
 import { ALL_TIMES, SERVICES, formatPrice, getBookableDates, getSessionPrice } from "@contracts/training";
 import type { ServiceId, SessionDuration } from "@contracts/training";
-import type { Client } from "braintree-web/client";
-import type { DataCollector } from "braintree-web/data-collector";
-import type { Venmo } from "braintree-web/venmo";
 
 type TimeSlot = (typeof ALL_TIMES)[number];
 
@@ -49,15 +45,6 @@ function friendlyTime(value: string) {
   return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
-function friendlyVenmoError(error: unknown) {
-  const code = (error as { code?: string })?.code;
-  if (code === "VENMO_APP_CANCELED" || code === "VENMO_CANCELED") {
-    return "Venmo authorization was cancelled. Your time is still reserved and no payment was recorded.";
-  }
-  if (error instanceof Error) return error.message;
-  return "Venmo checkout could not be completed. Your reservation is still available; please try again.";
-}
-
 function icsEscape(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, "\\n");
 }
@@ -72,18 +59,11 @@ export default function BookingFlow() {
   const [participants, setParticipants] = useState<1 | 2>(1);
   const [sessionDate, setSessionDate] = useState(dates[0]);
   const [startTime, setStartTime] = useState<TimeSlot | "">("");
-  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "venmo" | "pay_later">("pay_later");
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "pay_later">("pay_later");
   const [manageToken, setManageToken] = useState(initialToken || "");
   const [cancelArmed, setCancelArmed] = useState(false);
   const [calendarSaved, setCalendarSaved] = useState(false);
-  const [venmoReady, setVenmoReady] = useState(false);
-  const [venmoError, setVenmoError] = useState("");
   const verifyStarted = useRef(false);
-  const venmoResumeStarted = useRef(false);
-  const venmoSetupKey = useRef("");
-  const braintreeClient = useRef<Client | null>(null);
-  const venmoInstance = useRef<Venmo | null>(null);
-  const venmoDeviceData = useRef<DataCollector | null>(null);
   const utils = trpc.useUtils();
 
   const service = SERVICES.find((item) => item.id === serviceId) ?? SERVICES[0];
@@ -98,22 +78,6 @@ export default function BookingFlow() {
     { enabled: Boolean(manageToken && step === "confirmed"), retry: 1 },
   );
 
-  const needsVenmo = Boolean(
-    paymentConfig.data?.venmoEnabled &&
-      ((step === "details" && paymentMethod === "venmo") ||
-        (step === "confirmed" &&
-          currentBooking.data?.paymentMethod === "venmo" &&
-          currentBooking.data.paymentStatus !== "paid")),
-  );
-  const venmoClientToken = trpc.booking.venmoClientToken.useQuery(undefined, {
-    enabled: needsVenmo,
-    staleTime: 5 * 60_000,
-    retry: 1,
-  });
-
-  const payVenmo = trpc.booking.payVenmo.useMutation({
-    onSuccess: () => currentBooking.refetch(),
-  });
   const verifyPayment = trpc.booking.verifyPayment.useMutation({
     onSuccess: () => currentBooking.refetch(),
   });
@@ -140,85 +104,6 @@ export default function BookingFlow() {
       window.history.replaceState({}, "", `${url.pathname}?${url.searchParams.toString()}#book`);
     },
   });
-
-  const sendVenmoNonce = useCallback(async (token: string, nonce: string) => {
-    try {
-      await payVenmo.mutateAsync({
-        token,
-        paymentMethodNonce: nonce,
-        deviceData: venmoDeviceData.current?.deviceData || undefined,
-      });
-      setVenmoError("");
-    } catch (error) {
-      setVenmoError(friendlyVenmoError(error));
-      throw error;
-    }
-  }, [payVenmo]);
-
-  useEffect(() => {
-    const clientToken = venmoClientToken.data?.clientToken;
-    if (!needsVenmo || !clientToken || venmoSetupKey.current === clientToken) return;
-    venmoSetupKey.current = clientToken;
-    setVenmoReady(false);
-    setVenmoError("");
-
-    void (async () => {
-      try {
-        const [clientModule, venmoModule, dataCollectorModule] = await Promise.all([
-          import("braintree-web/client"),
-          import("braintree-web/venmo"),
-          import("braintree-web/data-collector"),
-        ]);
-        const client = await clientModule.create({ authorization: clientToken });
-        braintreeClient.current = client;
-        const venmo = await venmoModule.create({
-          client,
-          allowDesktop: true,
-          allowDesktopWebLogin: true,
-          mobileWebFallBack: true,
-          allowNewBrowserTab: false,
-          paymentMethodUsage: "single_use",
-          profileId: paymentConfig.data?.venmoProfileId || undefined,
-        });
-        venmoInstance.current = venmo;
-        if (!venmo.isBrowserSupported()) {
-          throw new Error("This browser doesn’t support Venmo checkout. Try Safari on iOS, Chrome on Android, or desktop web login.");
-        }
-        venmoDeviceData.current = await dataCollectorModule.create({ client });
-        setVenmoReady(true);
-
-        if (
-          venmo.hasTokenizationResult() &&
-          manageToken &&
-          currentBooking.data?.paymentMethod === "venmo" &&
-          currentBooking.data.paymentStatus === "pending" &&
-          !venmoResumeStarted.current
-        ) {
-          venmoResumeStarted.current = true;
-          const payload = await venmo.tokenize();
-          await sendVenmoNonce(manageToken, payload.nonce);
-        }
-      } catch (error) {
-        setVenmoError(friendlyVenmoError(error));
-      }
-    })();
-  }, [
-    currentBooking.data?.paymentMethod,
-    currentBooking.data?.paymentStatus,
-    manageToken,
-    needsVenmo,
-    paymentConfig.data?.venmoProfileId,
-    sendVenmoNonce,
-    venmoClientToken.data?.clientToken,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      void venmoInstance.current?.teardown();
-      void venmoDeviceData.current?.teardown();
-      void braintreeClient.current?.teardown();
-    };
-  }, []);
 
   useEffect(() => {
     if (step === "session" && !manageToken) return;
@@ -260,18 +145,6 @@ export default function BookingFlow() {
       verifyPayment.mutate({ token: manageToken, sessionId });
     }
   }, [manageToken, params, verifyPayment]);
-
-  async function completeVenmoPayment() {
-    if (!manageToken || !venmoInstance.current || !venmoReady || payVenmo.isPending) return;
-    setVenmoError("");
-    venmoResumeStarted.current = true;
-    try {
-      const payload = await venmoInstance.current.tokenize();
-      await sendVenmoNonce(manageToken, payload.nonce);
-    } catch (error) {
-      setVenmoError(friendlyVenmoError(error));
-    }
-  }
 
   function downloadCalendar() {
     const booking = currentBooking.data;
@@ -315,10 +188,7 @@ export default function BookingFlow() {
     setStartTime("");
     setStep("session");
     setCalendarSaved(false);
-    setVenmoError("");
-    venmoResumeStarted.current = false;
     createBooking.reset();
-    payVenmo.reset();
     cancelBooking.reset();
   }
 
@@ -553,21 +423,6 @@ export default function BookingFlow() {
                   <CreditCard size={20} />
                   <span><strong>Pay securely online</strong><small>{paymentConfig.data?.stripeEnabled ? "Card · Apple Pay · Google Pay" : "Activates when Stripe is connected"}</small></span>
                 </label>
-                <label className={paymentMethod === "venmo" ? "payment-option is-selected" : "payment-option"}>
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="venmo"
-                    checked={paymentMethod === "venmo"}
-                    onChange={() => {
-                      setPaymentMethod("venmo");
-                      setVenmoError("");
-                    }}
-                    disabled={!paymentConfig.data?.venmoEnabled}
-                  />
-                  <Smartphone size={20} />
-                  <span><strong>Venmo · @lucia-nuzzi</strong><small>{paymentConfig.data?.venmoEnabled ? "Authorize with the Venmo app or desktop login" : "Activates when Braintree Venmo is connected"}</small></span>
-                </label>
                 <label className={paymentMethod === "pay_later" ? "payment-option is-selected" : "payment-option"}>
                   <input type="radio" name="payment" value="pay_later" checked={paymentMethod === "pay_later"} onChange={() => setPaymentMethod("pay_later")} />
                   <WalletCards size={20} />
@@ -575,11 +430,9 @@ export default function BookingFlow() {
                 </label>
               </fieldset>
               <button className="button button-yellow checkout-button" type="submit" disabled={createBooking.isPending}>
-                {createBooking.isPending ? <><LoaderCircle className="spin" size={18} /> Reserving…</> : paymentMethod === "stripe" ? <>Continue to secure payment <ArrowRight size={18} /></> : paymentMethod === "venmo" ? <>Reserve & continue with Venmo <ArrowRight size={18} /></> : <>Confirm my session <ArrowRight size={18} /></>}
+                {createBooking.isPending ? <><LoaderCircle className="spin" size={18} /> Reserving…</> : paymentMethod === "stripe" ? <>Continue to secure payment <ArrowRight size={18} /></> : <>Confirm my session <ArrowRight size={18} /></>}
               </button>
               <p className="secure-note"><ShieldCheck size={15} /> Your details are used only to manage this booking.</p>
-              {paymentMethod === "venmo" && venmoClientToken.isError && <p className="form-error" role="alert">Venmo couldn’t connect. You can still reserve and retry from the next screen.</p>}
-              {paymentMethod === "venmo" && venmoError && <p className="form-error" role="alert">{venmoError}</p>}
               {createBooking.isError && <p className="form-error" role="alert">{createBooking.error.message}</p>}
             </aside>
           </div>
@@ -607,19 +460,8 @@ export default function BookingFlow() {
                   <div className="confirmation-mark"><Check size={38} strokeWidth={2.5} /></div>
                   <span className="booking-kicker">Booking LN-{String(currentBooking.data.id).padStart(5, "0")}</span>
                   <h3>{currentBooking.data.bookingStatus === "confirmed" ? "You’re booked. Let’s move." : "Your time is reserved."}</h3>
-                  <p>{currentBooking.data.customerName.split(" ")[0]}, your session details are below. {currentBooking.data.paymentStatus === "paid" ? "Payment is complete." : currentBooking.data.paymentMethod === "pay_later" ? "You can pay Lucia at the session." : currentBooking.data.paymentMethod === "venmo" ? currentBooking.data.paymentStatus === "processing" ? "Your Venmo payment is being reviewed. Contact Lucia before retrying." : "Your time is held. Complete Venmo below to finalize your booking." : "Complete payment to finalize your booking."}</p>
+                  <p>{currentBooking.data.customerName.split(" ")[0]}, your session details are below. {currentBooking.data.paymentStatus === "paid" ? "Payment is complete." : currentBooking.data.paymentMethod === "pay_later" ? "You can pay Lucia at the session." : "Complete payment to finalize your booking."}</p>
                   {params.get("payment") === "cancelled" && <p className="payment-notice">Card checkout was closed before payment. Your reservation is still visible here; you can cancel it and choose another option.</p>}
-                  {currentBooking.data.paymentMethod === "venmo" && currentBooking.data.paymentStatus !== "paid" && (
-                    <div className="venmo-checkout-panel">
-                      <div><Smartphone size={22} /><span><strong>{currentBooking.data.paymentStatus === "processing" ? "Venmo payment under review" : `Complete ${formatPrice(currentBooking.data.amountCents)} with Venmo`}</strong><small>{currentBooking.data.paymentStatus === "processing" ? "Do not submit another payment until Lucia confirms the result." : "Recipient: @lucia-nuzzi. You’ll approve the payment in Venmo; your session is confirmed only after it succeeds."}</small></span></div>
-                      {currentBooking.data.paymentStatus === "pending" && (
-                        <button className="button venmo-button" type="button" onClick={completeVenmoPayment} disabled={!venmoReady || payVenmo.isPending}>
-                          {payVenmo.isPending ? <><LoaderCircle className="spin" size={18} /> Recording payment…</> : venmoReady ? <>Complete with Venmo <ArrowRight size={18} /></> : <><LoaderCircle className="spin" size={18} /> Connecting to Venmo…</>}
-                        </button>
-                      )}
-                      {(venmoError || payVenmo.error || venmoClientToken.error) && <p className="form-error" role="alert">{venmoError || payVenmo.error?.message || "Venmo couldn’t connect. Please retry or cancel the reservation."}</p>}
-                    </div>
-                  )}
                   <div className="confirmation-actions">
                     <button className="button button-dark" type="button" onClick={downloadCalendar}><Download size={18} /> {calendarSaved ? "Calendar file saved" : "Add to calendar"}</button>
                     <button className="text-button" type="button" onClick={startAnother}>Book another session</button>
@@ -632,10 +474,7 @@ export default function BookingFlow() {
                   <div className="ticket-line"><MapPin size={18} /><span>{currentBooking.data.address}</span></div>
                   <div className="ticket-line"><Clock3 size={18} /><span>{currentBooking.data.duration} minutes</span></div>
                   <div className="ticket-line"><Users size={18} /><span>{currentBooking.data.participants === 1 ? "1 person" : "2 people training together"}</span></div>
-                  <div className="ticket-total"><span>{currentBooking.data.paymentStatus === "paid" ? currentBooking.data.paymentMethod === "venmo" ? "Paid with Venmo" : "Paid online" : currentBooking.data.paymentMethod === "venmo" ? "Venmo payment pending" : "Due at session"}</span><strong>{formatPrice(currentBooking.data.amountCents)}</strong></div>
-                  {currentBooking.data.paymentMethod === "venmo" && currentBooking.data.paymentStatus === "paid" && (
-                    <div className="venmo-receipt"><span>Venmo receipt</span><strong>{currentBooking.data.venmoUsername ? `@${currentBooking.data.venmoUsername.replace(/^@/, "")}` : "Venmo account confirmed"}</strong>{currentBooking.data.braintreeTransactionId && <small>Transaction {currentBooking.data.braintreeTransactionId}</small>}</div>
-                  )}
+                  <div className="ticket-total"><span>{currentBooking.data.paymentStatus === "paid" ? "Paid online" : "Due at session"}</span><strong>{formatPrice(currentBooking.data.amountCents)}</strong></div>
                   {currentBooking.data.paymentStatus === "processing" ? <p className="processing-note">Payment review in progress. Contact Lucia to change this session.</p> : !cancelArmed ? (
                     <button className="cancel-link" type="button" onClick={() => setCancelArmed(true)}>Need to cancel?</button>
                   ) : (

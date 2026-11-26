@@ -1,6 +1,6 @@
 # Lucia Nuzzi — At-Home Personal Training
 
-A responsive full-stack personal-training website with editorial motion, an interactive session finder, persistent appointment booking, calendar export, cancellation, and optional Stripe Checkout and Venmo through Braintree.
+A responsive full-stack personal-training website with editorial motion, an interactive session finder, persistent appointment booking, calendar export, cancellation, and optional Stripe Checkout.
 
 ## Run
 
@@ -39,28 +39,6 @@ Create a Stripe webhook pointing to `/api/stripe/webhook` and subscribe to:
 Stripe Checkout uses the booking's server-side service price, not a browser-supplied amount. Successful payments mark the booking paid and confirmed through both the return verification and the webhook.
 
 Do not expose the secret keys through `VITE_` variables or frontend code.
-
-## Activate Venmo through Braintree
-
-Venmo stays disabled until all three Braintree credentials are supplied. Use sandbox credentials while testing, then switch the environment and credentials together for production:
-
-```bash
-BRAINTREE_ENVIRONMENT=sandbox
-BRAINTREE_MERCHANT_ID=...
-BRAINTREE_PUBLIC_KEY=...
-BRAINTREE_PRIVATE_KEY=...
-```
-
-The checkout identifies **@lucia-nuzzi** as the intended recipient. Enable Venmo in the Braintree merchant account, complete Venmo's business review, and ensure that merchant account is linked to Lucia Nuzzi's Venmo business profile before accepting live payments. Braintree routes funds through that linked business profile—not through the displayed username alone. If the account requires a specific merchant account or Venmo business profile ID, also set:
-
-```bash
-BRAINTREE_MERCHANT_ACCOUNT_ID=...
-BRAINTREE_VENMO_PROFILE_ID=...
-```
-
-The browser receives only a short-lived Braintree client token. After the visitor authorizes a single-use Venmo payment, the server charges the booking's stored server-calculated total with device data and immediate settlement. Only a successful Braintree transaction marks the booking paid; the confirmation includes the server-returned Venmo username and transaction ID. Cancelled or declined authorization remains unpaid, and an ambiguous gateway response stays in a processing state to prevent an automatic duplicate charge.
-
-Never expose `BRAINTREE_PRIVATE_KEY` through `VITE_` variables or frontend code. Production Venmo checkout requires HTTPS, an approved production Braintree account, and testing of the mobile app-return and desktop login flows with real merchant credentials.
 
 ## Local SEO
 
