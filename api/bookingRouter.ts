@@ -1,11 +1,42 @@
 import { z } from "zod";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, gte, lte, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { bookings } from "@db/schema";
+import { blockedSlots, bookings } from "@db/schema";
 import { ALL_TIMES, SERVICE_IDS, VENMO_USERNAME, getBookableDates, getService, getSessionPrice, sessionsOverlap, supportsDuration } from "@contracts/training";
 import { getStripe, isStripeEnabled } from "./stripe";
+import { log } from "./lib/logger";
+
+// The blocked_slots table is applied to production by hand (SQL is run before
+// the code that needs it deploys). If it is ever missing — a deploy race, a
+// fresh dev database — public booking must keep working with zero blocks
+// rather than 500ing the whole site's availability.
+async function safeBlocks(query: () => Promise<{ blockDate: string; startTime: string | null }[]>) {
+  try {
+    return await query();
+  } catch (error) {
+    log.warn("blocked_slots unavailable, continuing without blocks", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [] as { blockDate: string; startTime: string | null }[];
+  }
+}
+
+function blocksForDate(blocks: { blockDate: string; startTime: string | null }[], date: string) {
+  return blocks.filter((block) => block.blockDate === date);
+}
+
+function isBlocked(
+  blocks: { blockDate: string; startTime: string | null }[],
+  startTime: string,
+  duration: number,
+) {
+  return blocks.some(
+    (block) =>
+      block.startTime === null || sessionsOverlap(startTime, duration, block.startTime, 30),
+  );
+}
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const timeSchema = z.enum(ALL_TIMES);
@@ -49,14 +80,57 @@ export const bookingRouter = createRouter({
     .input(z.object({ date: dateSchema, duration: durationSchema }))
     .query(async ({ input }) => {
       assertBookableDate(input.date);
-      const taken = await getDb()
+      const db = getDb();
+      const taken = await db
         .select({ startTime: bookings.startTime, duration: bookings.duration })
         .from(bookings)
         .where(and(eq(bookings.sessionDate, input.date), ne(bookings.bookingStatus, "cancelled")));
-      return ALL_TIMES.filter(
-        (time) => !taken.some((slot) => sessionsOverlap(time, input.duration, slot.startTime, slot.duration)),
-      ).map((time) => ({ time, available: true }));
+      const blocks = blocksForDate(
+        await safeBlocks(() =>
+          db
+            .select({ blockDate: blockedSlots.blockDate, startTime: blockedSlots.startTime })
+            .from(blockedSlots)
+            .where(eq(blockedSlots.blockDate, input.date)),
+        ),
+        input.date,
+      );
+      return ALL_TIMES.map((time) => {
+        if (isBlocked(blocks, time, input.duration)) {
+          return { time, available: false, status: "blocked" as const };
+        }
+        if (taken.some((slot) => sessionsOverlap(time, input.duration, slot.startTime, slot.duration))) {
+          return { time, available: false, status: "booked" as const };
+        }
+        return { time, available: true, status: "available" as const };
+      });
     }),
+
+  // Dates in the booking window that Lucia has blocked off entirely, so the
+  // date picker can disable them up front instead of after the fact.
+  blockedDays: publicQuery.query(async () => {
+    const window = getBookableDates();
+    const rows = await safeBlocks(() =>
+      getDb()
+        .select({ blockDate: blockedSlots.blockDate, startTime: blockedSlots.startTime })
+        .from(blockedSlots)
+        .where(
+          and(
+            gte(blockedSlots.blockDate, window[0]),
+            lte(blockedSlots.blockDate, window[window.length - 1]),
+          ),
+        ),
+    );
+    const wholeDays = new Set(rows.filter((row) => row.startTime === null).map((row) => row.blockDate));
+    // A day whose every slot is individually blocked is effectively closed too.
+    const perDay = new Map<string, number>();
+    for (const row of rows) {
+      if (row.startTime !== null) perDay.set(row.blockDate, (perDay.get(row.blockDate) ?? 0) + 1);
+    }
+    for (const [date, count] of perDay) {
+      if (count >= ALL_TIMES.length) wholeDays.add(date);
+    }
+    return window.filter((date) => wholeDays.has(date));
+  }),
 
   create: publicQuery.input(bookingInput).mutation(async ({ input, ctx }) => {
     assertBookableDate(input.sessionDate);
@@ -91,6 +165,19 @@ export const bookingRouter = createRouter({
     );
     if (conflict) {
       throw new TRPCError({ code: "CONFLICT", message: "That session overlaps another booking. Please choose another time." });
+    }
+
+    const blocks = blocksForDate(
+      await safeBlocks(() =>
+        db
+          .select({ blockDate: blockedSlots.blockDate, startTime: blockedSlots.startTime })
+          .from(blockedSlots)
+          .where(eq(blockedSlots.blockDate, input.sessionDate)),
+      ),
+      input.sessionDate,
+    );
+    if (isBlocked(blocks, input.startTime, duration)) {
+      throw new TRPCError({ code: "CONFLICT", message: "That time is blocked off. Please choose another time." });
     }
     const cancelledAtStart = dayBookings.find(
       (booking) => booking.startTime === input.startTime && booking.bookingStatus === "cancelled",

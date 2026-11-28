@@ -385,7 +385,7 @@ export default function Home() {
         <a href="#book" className="footer-cta"><span>LET’S MOVE.</span><i><ArrowUpRight /></i></a>
         <div className="footer-bottom">
           <a className="brand footer-brand" href="#top"><span className="brand-mark">LN</span><span>Lucia Nuzzi<small>Personal training</small></span></a>
-          <div><a href="#coaching">Coaching</a><a href="#method">Method</a><a href="#book">Book</a></div>
+          <div><a href="#coaching">Coaching</a><a href="#method">Method</a><a href="#book">Book</a><a href="/admin">Admin</a></div>
           <a href="https://www.instagram.com/lucialuciafit/" target="_blank" rel="noreferrer"><Instagram size={18} /> @lucialuciafit</a>
           <span>© {new Date().getFullYear()} Lucia Nuzzi</span>
         </div>

@@ -1,7 +1,8 @@
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { log } from "./lib/logger";
+import { sessionFromRequest } from "./lib/admin";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -28,3 +29,11 @@ const t = initTRPC.context<TrpcContext>().create({
 
 export const createRouter = t.router;
 export const publicQuery = t.procedure;
+
+// Everything under admin.* requires the signed admin cookie (see lib/admin.ts).
+export const adminProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!sessionFromRequest(ctx.req)) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Admin sign-in required." });
+  }
+  return next();
+});

@@ -74,6 +74,7 @@ export default function BookingFlow() {
     { enabled: step === "session", staleTime: 15_000 },
   );
   const paymentConfig = trpc.booking.paymentConfig.useQuery(undefined, { staleTime: 60_000 });
+  const blockedDays = trpc.booking.blockedDays.useQuery(undefined, { staleTime: 30_000 });
   const currentBooking = trpc.booking.byToken.useQuery(
     { token: manageToken },
     { enabled: Boolean(manageToken && step === "confirmed"), retry: 1 },
@@ -129,6 +130,19 @@ export default function BookingFlow() {
     window.addEventListener("lucia:select-service", selectService);
     return () => window.removeEventListener("lucia:select-service", selectService);
   }, []);
+
+  // If Lucia blocks the currently selected day, move the picker to the first
+  // open day rather than leaving the client staring at an empty time list.
+  useEffect(() => {
+    if (!blockedDays.data?.length) return;
+    if (blockedDays.data.includes(sessionDate)) {
+      const nextOpen = dates.find((date) => !blockedDays.data.includes(date));
+      if (nextOpen) {
+        setSessionDate(nextOpen);
+        setStartTime("");
+      }
+    }
+  }, [blockedDays.data, sessionDate, dates]);
 
   useEffect(() => {
     const sessionId = params.get("session_id");
@@ -307,21 +321,23 @@ export default function BookingFlow() {
             <div className="date-picker" role="group" aria-label="Available dates">
               {dates.map((date) => {
                 const day = new Date(`${date}T12:00:00`);
+                const isBlocked = blockedDays.data?.includes(date) ?? false;
                 return (
                   <button
                     type="button"
                     key={date}
-                    className={sessionDate === date ? "date-option is-selected" : "date-option"}
+                    disabled={isBlocked}
+                    className={`date-option${sessionDate === date ? " is-selected" : ""}${isBlocked ? " is-disabled" : ""}`}
                     onClick={() => {
                       setSessionDate(date);
                       setStartTime("");
                     }}
                     aria-pressed={sessionDate === date}
-                    aria-label={friendlyDate(date, true)}
+                    aria-label={isBlocked ? `${friendlyDate(date, true)} — unavailable` : friendlyDate(date, true)}
                   >
                     <span>{new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(day)}</span>
                     <strong>{day.getDate()}</strong>
-                    <small>{new Intl.DateTimeFormat("en-US", { month: "short" }).format(day)}</small>
+                    <small>{isBlocked ? "Off" : new Intl.DateTimeFormat("en-US", { month: "short" }).format(day)}</small>
                   </button>
                 );
               })}
@@ -346,7 +362,8 @@ export default function BookingFlow() {
                     aria-pressed={startTime === slot.time}
                   >
                     {friendlyTime(slot.time)}
-                    {!slot.available && <small>Booked</small>}
+                    {slot.status === "booked" && <small>Booked</small>}
+                    {slot.status === "blocked" && <small>Off</small>}
                   </button>
                 ))}
               </div>

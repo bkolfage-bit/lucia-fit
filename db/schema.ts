@@ -47,5 +47,20 @@ export const bookings = mysqlTable(
   ],
 );
 
+export const blockedSlots = mysqlTable(
+  "blocked_slots",
+  {
+    id: serial("id").primaryKey(),
+    blockDate: varchar("block_date", { length: 10 }).notNull(),
+    // NULL means the whole day is blocked; otherwise one 30-minute slot.
+    startTime: varchar("start_time", { length: 5 }),
+    reason: varchar("reason", { length: 200 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("blocked_slots_date_idx").on(table.blockDate)],
+);
+
 export type Booking = typeof bookings.$inferSelect;
 export type InsertBooking = typeof bookings.$inferInsert;
+export type BlockedSlot = typeof blockedSlots.$inferSelect;
+export type InsertBlockedSlot = typeof blockedSlots.$inferInsert;
