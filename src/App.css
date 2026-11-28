@@ -1992,12 +1992,23 @@ button {
 
 .footer-bottom {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr auto;
+  grid-template-columns: 1.2fr 1fr 1fr auto auto;
   align-items: center;
   gap: 24px;
   padding-top: 28px;
   border-top: 1px solid oklch(0.985 0.005 90 / 0.25);
   font-size: 12px;
+}
+
+.footer-credit {
+  opacity: 0.65;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  transition: opacity 160ms ease-out;
+}
+
+.footer-credit:hover {
+  opacity: 1;
 }
 
 .footer-bottom > div {
@@ -2356,6 +2367,7 @@ button {
   .footer-bottom { grid-template-columns: 1fr; gap: 14px; }
   .footer-bottom > div { order: 2; }
   .footer-bottom > span { order: 3; }
+  .footer-bottom .footer-credit { order: 4; }
 
   .mobile-sticky-book {
     position: fixed;

@@ -388,6 +388,7 @@ export default function Home() {
           <div><a href="#coaching">Coaching</a><a href="#method">Method</a><a href="#book">Book</a><a href="/admin">Admin</a></div>
           <a href="https://www.instagram.com/lucialuciafit/" target="_blank" rel="noreferrer"><Instagram size={18} /> @lucialuciafit</a>
           <span>© {new Date().getFullYear()} Lucia Nuzzi</span>
+          <a className="footer-credit" href="https://duneanddigital.com/" target="_blank" rel="noreferrer">Built by Dune &amp; Digital</a>
         </div>
       </footer>
 
