@@ -50,6 +50,13 @@ function icsEscape(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, "\\n");
 }
 
+// The form collects street, city, state, and ZIP separately (better mobile
+// keyboards + browser autofill); they are joined into one full address for
+// storage and display. Apt/suite stays on the street line.
+function formatAddress(street: string, city: string, state: string, zip: string) {
+  return `${street.trim()}, ${city.trim()}, ${state.trim().toUpperCase()} ${zip.trim()}`;
+}
+
 export default function BookingFlow() {
   const dates = useMemo(() => getBookableDates(), []);
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
@@ -219,7 +226,12 @@ export default function BookingFlow() {
       customerName: String(form.get("customerName") || ""),
       email: String(form.get("email") || ""),
       phone: String(form.get("phone") || ""),
-      address: String(form.get("address") || ""),
+      address: formatAddress(
+        String(form.get("address") || ""),
+        String(form.get("city") || ""),
+        String(form.get("state") || ""),
+        String(form.get("zip") || ""),
+      ),
       goals: String(form.get("goals") || ""),
       notes: String(form.get("notes") || ""),
       paymentMethod,
@@ -401,8 +413,19 @@ export default function BookingFlow() {
                 <label className="field-label">Phone
                   <input name="phone" type="tel" autoComplete="tel" required minLength={7} placeholder="Best number to reach you" />
                 </label>
-                <label className="field-label">Training address
-                  <input name="address" autoComplete="street-address" required minLength={5} placeholder="Where should Lucia meet you?" />
+                <label className="field-label">Street address
+                  <input name="address" autoComplete="address-line1" required minLength={5} placeholder="House number and street" />
+                </label>
+              </div>
+              <div className="field-row field-row-address">
+                <label className="field-label">City
+                  <input name="city" autoComplete="address-level2" required minLength={2} placeholder="Palm Beach" />
+                </label>
+                <label className="field-label">State
+                  <input name="state" autoComplete="address-level1" required maxLength={2} defaultValue="FL" placeholder="FL" />
+                </label>
+                <label className="field-label">ZIP
+                  <input name="zip" autoComplete="postal-code" inputMode="numeric" required minLength={5} maxLength={10} pattern="\d{5}(-\d{4})?" placeholder="33480" />
                 </label>
               </div>
               <label className="field-label">What would you like to work on?
