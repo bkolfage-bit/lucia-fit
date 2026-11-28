@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Clock,
   DollarSign,
+  Download,
   LoaderCircle,
   Lock,
   LogOut,
@@ -57,6 +58,36 @@ function smsHref(phone: string, body: string) {
 
 function mailHref(email: string, subject: string, body: string) {
   return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+// Fetches a CSV export and saves it as a dated download. trpc.useUtils().fetch
+// runs inside the app, so the admin session cookie goes along automatically.
+function useCsvDownload() {
+  const utils = trpc.useUtils();
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function download(kind: "bookings" | "clients") {
+    setBusy(kind);
+    try {
+      const csv =
+        kind === "bookings"
+          ? await utils.admin.exportBookings.fetch()
+          : await utils.admin.exportClients.fetch();
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `lucia-${kind}-${localToday()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return { busy, download };
 }
 
 export default function Admin() {
@@ -230,11 +261,24 @@ const bookingLabel: Record<BookingRow["bookingStatus"], string> = {
 function ScheduleTab() {
   const [filter, setFilter] = useState<"upcoming" | "past" | "all">("upcoming");
   const bookings = trpc.admin.bookings.useQuery({ filter });
+  const csv = useCsvDownload();
 
   return (
     <section className="admin-panel">
       <div className="admin-panel-head">
-        <h2>Sessions</h2>
+        <div className="admin-panel-title-row">
+          <h2>Sessions</h2>
+          <button
+            type="button"
+            className="admin-icon-button"
+            disabled={csv.busy !== null}
+            onClick={() => csv.download("bookings")}
+          >
+            {csv.busy === "bookings" ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}
+            Export all (CSV)
+          </button>
+        </div>
+        <p>Export includes every booking ever made — cancelled ones too.</p>
         <div className="admin-filter" role="group" aria-label="Filter sessions">
           {(["upcoming", "past", "all"] as const).map((value) => (
             <button
@@ -456,6 +500,7 @@ type ClientRow = {
   sessions: number;
   upcoming: number;
   completedSessions: number;
+  cancelled: number;
   totalCents: number;
   lastSession: string | null;
   nextSession: string | null;
@@ -465,6 +510,7 @@ function ClientsTab() {
   const clients = trpc.admin.clients.useQuery();
   const [query, setQuery] = useState("");
   const [openEmail, setOpenEmail] = useState<string | null>(null);
+  const csv = useCsvDownload();
 
   const filtered = useMemo(() => {
     const list = (clients.data ?? []) as ClientRow[];
@@ -481,8 +527,19 @@ function ClientsTab() {
   return (
     <section className="admin-panel">
       <div className="admin-panel-head">
-        <h2>Clients</h2>
-        <p>Everyone who books is added here automatically, with their contact details ready to use.</p>
+        <div className="admin-panel-title-row">
+          <h2>Clients</h2>
+          <button
+            type="button"
+            className="admin-icon-button"
+            disabled={csv.busy !== null}
+            onClick={() => csv.download("clients")}
+          >
+            {csv.busy === "clients" ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}
+            Export clients (CSV)
+          </button>
+        </div>
+        <p>Everyone who books is added here automatically — including people who cancelled, so you can always reach back out.</p>
       </div>
 
       <label className="admin-search">
@@ -531,8 +588,9 @@ function ClientCard({ client, open, onToggle }: { client: ClientRow; open: boole
           <span className="admin-avatar" aria-hidden="true"><UserRound size={18} /></span>
           <div>
             <strong>{client.name}</strong>
-            <span>{client.sessions} session{client.sessions === 1 ? "" : "s"}
+            <span>{client.sessions === 0 && client.cancelled > 0 ? "No sessions yet" : `${client.sessions} session${client.sessions === 1 ? "" : "s"}`}
               {client.completedSessions > 0 && ` · ${client.completedSessions} completed`}
+              {client.cancelled > 0 && ` · ${client.cancelled} cancelled`}
               {client.totalCents > 0 && ` · ${formatPrice(client.totalCents)} paid`}
             </span>
           </div>

@@ -2591,6 +2591,14 @@ button {
   margin-bottom: 16px;
 }
 
+.admin-panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .admin-panel-head p {
   font-size: 13px;
   color: var(--ink-soft);

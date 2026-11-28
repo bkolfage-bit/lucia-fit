@@ -62,7 +62,8 @@ Until the table exists, the public booking site keeps working normally (it treat
 
 - **Schedule** — every booking with client contact shortcuts (call / email / text), payment and confirmation status, and actions: mark paid (use when a Venmo payment arrives), confirm, complete, or cancel (two-tap).
 - **Availability** — block a whole day or a single start time, with an optional private reason. Blocked days appear as "Off" in the booking date picker and blocked times can't be selected or booked; removing a block reopens it instantly.
-- **Clients** — a client database built automatically from bookings: latest contact details, session counts, next session, and total paid. Search by name, email, or phone; type a message once and send it via the email or Messages app with the address filled in; expand any client for their full booking history.
+- **Clients** — a client database built automatically from bookings: latest contact details, session counts, next session, and total paid. Everyone who books stays on file — including people who cancelled (shown with a cancelled count), so their contact details are always there for outreach. Search by name, email, or phone; type a message once and send it via the email or Messages app with the address filled in; expand any client for their full booking history.
+- **CSV export** — the Schedule tab downloads `lucia-bookings-YYYY-MM-DD.csv` (every booking ever made, cancelled included, with contact details, payment and status) and the Clients tab downloads `lucia-clients-YYYY-MM-DD.csv` (one row per person: contact details, sessions booked/completed/cancelled, total paid, first and last activity). Both open directly in Excel, Numbers, or Google Sheets.
 
 Dashboard UI: `src/pages/Admin.tsx`. API: `api/adminRouter.ts` (passcode gate in `api/lib/admin.ts`).
 

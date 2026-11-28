@@ -23,6 +23,13 @@ function localToday(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
+// RFC 4180: quote anything containing a comma, quote, or newline.
+function csvCell(value: string | number): string {
+  const text = String(value);
+  if (/[",\r\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
+  return text;
+}
+
 function assertValidDate(value: string) {
   const date = new Date(`${value}T12:00:00`);
   if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
@@ -119,13 +126,13 @@ export const adminRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       const today = localToday();
-      const conditions = [];
+      const conditions = [ne(bookings.bookingStatus, "cancelled")];
       if (input.filter === "upcoming") conditions.push(gte(bookings.sessionDate, today));
       if (input.filter === "past") conditions.push(lt(bookings.sessionDate, today));
       const rows = await db
         .select()
         .from(bookings)
-        .where(conditions.length ? and(...conditions) : undefined)
+        .where(and(...conditions))
         .orderBy(
           input.filter === "past"
             ? desc(bookings.sessionDate)
@@ -237,15 +244,15 @@ export const adminRouter = createRouter({
       });
     }),
 
-  // The client database is derived from bookings: anyone who has ever booked
-  // (and not had every booking cancelled) appears here with their latest
-  // contact details. No separate table to keep in sync.
+  // The client database is derived from bookings: everyone who has ever
+  // booked appears here with their latest contact details — including people
+  // who cancelled, since their contact info is still valuable for outreach.
+  // No separate table to keep in sync.
   clients: adminProcedure.query(async () => {
     const db = getDb();
     const rows = await db
       .select()
       .from(bookings)
-      .where(ne(bookings.bookingStatus, "cancelled"))
       .orderBy(desc(bookings.createdAt));
     const today = localToday();
     const byEmail = new Map<string, {
@@ -256,6 +263,7 @@ export const adminRouter = createRouter({
       sessions: number;
       upcoming: number;
       completedSessions: number;
+      cancelled: number;
       totalCents: number;
       lastSession: string | null;
       nextSession: string | null;
@@ -270,18 +278,23 @@ export const adminRouter = createRouter({
         sessions: 0,
         upcoming: 0,
         completedSessions: 0,
+        cancelled: 0,
         totalCents: 0,
         lastSession: null,
         nextSession: null,
       };
-      entry.sessions += 1;
+      if (row.bookingStatus === "cancelled") {
+        entry.cancelled += 1;
+      } else {
+        entry.sessions += 1;
+      }
       if (row.sessionDate >= today && (row.bookingStatus === "confirmed" || row.bookingStatus === "pending")) {
         entry.upcoming += 1;
         if (!entry.nextSession || row.sessionDate < entry.nextSession) entry.nextSession = row.sessionDate;
       }
       if (row.bookingStatus === "completed") entry.completedSessions += 1;
       if (row.paymentStatus === "paid") entry.totalCents += row.amountCents;
-      if (row.sessionDate <= today && (!entry.lastSession || row.sessionDate > entry.lastSession)) {
+      if (row.sessionDate <= today && row.bookingStatus !== "cancelled" && (!entry.lastSession || row.sessionDate > entry.lastSession)) {
         entry.lastSession = row.sessionDate;
       }
       byEmail.set(key, entry);
@@ -303,4 +316,101 @@ export const adminRouter = createRouter({
         .orderBy(desc(bookings.sessionDate), desc(bookings.startTime));
       return rows.map((row) => ({ ...row, manageToken: undefined }));
     }),
+
+  // CSV export of every booking ever made — cancelled included, so nothing
+  // (and no one) is ever lost. The browser downloads it as a file.
+  exportBookings: adminProcedure.query(async () => {
+    const rows = await getDb()
+      .select()
+      .from(bookings)
+      .orderBy(asc(bookings.sessionDate), asc(bookings.startTime));
+    const header = [
+      "id", "date", "time", "duration_min", "service", "amount_usd",
+      "name", "email", "phone", "address", "goals", "notes",
+      "payment_method", "payment_status", "booking_status", "booked_at",
+    ];
+    const lines = rows.map((row) =>
+      [
+        row.id,
+        row.sessionDate,
+        row.startTime,
+        row.duration,
+        row.serviceName,
+        (row.amountCents / 100).toFixed(2),
+        row.customerName,
+        row.email,
+        row.phone,
+        row.address,
+        row.goals ?? "",
+        row.notes ?? "",
+        row.paymentMethod,
+        row.paymentStatus,
+        row.bookingStatus,
+        row.createdAt.toISOString(),
+      ]
+        .map(csvCell)
+        .join(","),
+    );
+    return [header.join(","), ...lines].join("\r\n");
+  }),
+
+  // CSV export of the client database — one row per person (by email),
+  // latest contact details, with cancelled bookings counted separately.
+  exportClients: adminProcedure.query(async () => {
+    const rows = await getDb()
+      .select()
+      .from(bookings)
+      .orderBy(desc(bookings.createdAt));
+    const byEmail = new Map<string, {
+      name: string; email: string; phone: string; address: string;
+      sessions: number; completed: number; cancelled: number; totalCents: number;
+      firstBookedAt: Date; lastActivityAt: Date;
+    }>();
+    for (const row of rows) {
+      const key = row.email.toLowerCase();
+      const entry = byEmail.get(key) ?? {
+        name: row.customerName,
+        email: row.email,
+        phone: row.phone,
+        address: row.address,
+        sessions: 0,
+        completed: 0,
+        cancelled: 0,
+        totalCents: 0,
+        firstBookedAt: row.createdAt,
+        lastActivityAt: row.createdAt,
+      };
+      if (row.bookingStatus === "cancelled") entry.cancelled += 1;
+      else entry.sessions += 1;
+      if (row.bookingStatus === "completed") entry.completed += 1;
+      if (row.paymentStatus === "paid") entry.totalCents += row.amountCents;
+      if (row.createdAt < entry.firstBookedAt) entry.firstBookedAt = row.createdAt;
+      if (row.createdAt > entry.lastActivityAt) entry.lastActivityAt = row.createdAt;
+      byEmail.set(key, entry);
+    }
+    const header = [
+      "name", "email", "phone", "address",
+      "sessions_booked", "sessions_completed", "sessions_cancelled",
+      "total_paid_usd", "first_booking_at", "last_activity_at",
+    ];
+    const lines = [...byEmail.values()]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((client) =>
+        [
+          client.name,
+          client.email,
+          client.phone,
+          client.address,
+          client.sessions,
+          client.completed,
+          client.cancelled,
+          (client.totalCents / 100).toFixed(2),
+          client.firstBookedAt.toISOString(),
+          client.lastActivityAt.toISOString(),
+        ]
+          .map(csvCell)
+          .join(","),
+      );
+    return [header.join(","), ...lines].join("\r\n");
+  }),
 });
